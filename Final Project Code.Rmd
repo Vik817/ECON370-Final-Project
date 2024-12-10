@@ -1,0 +1,81 @@
+---
+title: "Final Project Presentation (ECON 370)"
+output: html_document
+date: "2024-12-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+transport_data = read.csv("/Users/vikram/Documents/ECON 370/Final Project/Data/Transportation_Data.csv")
+event_data = read.csv("/Users/vikram/Documents/ECON 370/Final Project/Data/Time_Series_Event_Data.csv")
+```
+
+```{r}
+library(tidyverse)
+transport_data$OBS_DATE <- as.Date(transport_data$OBS_DATE, format = "%m/%d/%Y")
+transport_data$Year <- format(transport_data$OBS_DATE, "%Y")
+transport_data$Month = format(transport_data$OBS_DATE, "%m")
+filtered_dat = transport_data |>
+  select(OBS_DATE, TRANSIT_D11, VMT, Year, Month)
+
+transit_data_monthly = filtered_dat |>
+  filter(Year > 2013 & Year < 2024) |>
+  mutate(Year = as.integer(Year), Month = as.integer(Month)) |>
+  mutate(Month_Year = paste0(Month,"/", Year))
+
+transit_mean_by_year = filtered_dat |>
+  filter(Year > 2013 & Year < 2024) |>
+  group_by(Year) |>
+  summarize(avg_transit = mean(TRANSIT_D11),
+            avg_vmt = mean(VMT))
+transit_ride_by_year = ggplot(data=transit_mean_by_year, aes(x = Year, y = as.numeric(avg_transit), group=1)) + 
+  geom_line(color = "blue", linewidth=1) +
+  geom_point(aes(size = avg_vmt, color="darkred", alpha=0.9))+ guides(color = FALSE, alpha = FALSE) +
+  labs(title = "Seasonally Adjusted Transit Ridership Since 2010", x = "Date", y = "Ridership (Thousands)", legend = "Average Vehicle Miles Traveled") + labs(size = "Avg Vehicle Miles Traveled")
+
+```
+
+
+```{r}
+# Adding a column to convert months into numbers to make it easier to sort/group
+new_event_data = event_data |>
+  mutate(Month = as.integer(factor(Month, levels = month.name))) |>
+  arrange(Year, Month) |>
+  select(Year, Month, Total.Collisions, Total.Events, Total.Fatalities, Total.Injuries) |>
+  filter(Year < 2024) |>
+  group_by(Year, Month) |>
+  summarise(Collisions = sum(Total.Collisions), Events = sum(Total.Events), Fatalities = sum(Total.Fatalities), Injuries = sum(Total.Injuries)) |>
+  mutate(Month_Year = paste0(Month,"/", Year))
+
+mean_by_year = new_event_data |>
+  select(-Month) |>
+  group_by(Year) |>
+  summarise(Collisions = sum(Collisions), Events = sum(Events), Fatalities = sum(Fatalities), Injuries = sum(Injuries))
+
+ggplot(mean_by_year, aes(x=Year, y=Fatalities)) +
+  geom_line() +
+  labs(title = "Transit Related Fatalities From 2014-2023", x="Year", y="Fatalities")
+```
+SUM UP THE OBSERVATIONS by YEAR AND MONTH. FIGURE OUT HOW TO DO REGION STUFF AFTER
+
+
+JOINING DATA
+```{r}
+transit_and_events = full_join(new_event_data, transit_data_monthly, by="Month_Year")
+transit_and_events |>
+  select(Month_Year, everything())
+```
+
+
+
+
+```{r}
+event_data |>
+  select(Primary.UZA.Name) |>
+  filter(Primary.UZA.Name != "") |>
+  group_by(Primary.UZA.Name) |>
+  summarize(count = n())
+```
