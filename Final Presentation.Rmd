@@ -41,23 +41,39 @@ opts_chunk$set(
   fig.align="center", fig.width=6, fig.height=3.5, 
   # out.width="748px", #out.length="520.75px",
   dpi=300, #fig.path='Figs/',
-  cache=T#, echo=F, warning=F, message=F
+  cache=T, warning=F, message=F
   )
+```
+
+
+```{r, include=FALSE}
+# Load libraries
+library(tidyverse)
+theme_set(hrbrthemes::theme_ipsum())
 ```
 
 # What Are We Studying
 
 --
 
+## Background:
+In this study, I define *operational intensity* as factors that indicate the performance and overall attributes of any type of transportation. This can include load factors, vehicular performance in miles traveled, and more.
+
+We want to be able to identify if there is a relationship among improvements or changes in operational intensity, and how that can affect the safety of those who use transportation services.
+
 ## Research Question: 
-How do different factors of operational intensity correlate with overall
-transportation safety?
+**How do different factors of operational intensity correlate with different metrics of 
+transportation safety?**
 
---
+---
 
-## Motivation: 
-Why do we want to study this?
-- 
+# Motivation 
+## Why do we want to study this?
+- Preventing any sort transportation related injuries, incidents and fatalities are important by nature
+
+- Being able to see trends across years of how vehicular performance coincides with these factors can lend insight into potential developments that impact safety
+
+- Moreover, seeing how resource consumption and usage, which often plays a part in vehicular performance, can also lend further insight into safety statistics
 
 ---
 # Data
@@ -72,45 +88,280 @@ Why do we want to study this?
 **Modal Service data and Safety & Security (S&S) public transit time series data**
 - Created by the U.S. Department of Transportation (DOT), (Federal Transit Administration).
 - Measures statistics about transportation in regards to major and non-major safety events
-```{r, include=F}
-transport_data = read.csv("/Users/vikram/Documents/ECON 370/Final Project/Data/Transportation_Data.csv")
-event_data = read.csv("/Users/vikram/Documents/ECON 370/Final Project/Data/Time_Series_Event_Data.csv")
-```
 ---
 # Key Variables
-```{r, echo=FALSE}
-data = list(c(1,2,3,4), c(1,5,3,2))
-knitr::kable(data, caption = "Tables with kable")
+--
+
+## *VMT*:
+Vehicle Miles Traveled (Used as our main measure of operational intensity and our main predictor variable)
+
+--
+
+## *Injuries*:
+Transportation related injuries that occurred. Include:
+
+- Passenger, Operator, People Waiting or Leaving Injuries
+
+--
+
+## *Fatalities*:
+Transportation related fatalities that occurred Include:
+
+- Pedestrian in/not in crosswalk, Employee or Passenger Fatalities
+
+---
+# Data Cleaning Process
+**Loading Data:**
+```{r}
+transport_data = read.csv(
+  "/Users/vikram/Documents/ECON 370/Final Project/Data/Transportation_Data.csv")
+event_data = read.csv(
+  "/Users/vikram/Documents/ECON 370/Final Project/Data/Time_Series_Event_Data.csv")
 ```
 
---
+**Cleaning Transport_Data:**
+```{r}
+transport_data$OBS_DATE <- as.Date(transport_data$OBS_DATE, format = "%m/%d/%Y")
+transport_data$Year <- format(transport_data$OBS_DATE, "%Y")
+transport_data$Month = format(transport_data$OBS_DATE, "%m")
+filtered_dat = transport_data |>
+  select(OBS_DATE, VMT, Year, Month, PETROLEUM_D11, NATURAL_GAS_D11)
 
-What can we do here?
-
---
-
-You are recommended to use the [RStudio IDE](https://www.rstudio.com/products/rstudio/), but you do not have to.
-
-- Create a new R Markdown document from the menu `File -> New File -> R Markdown -> From Template -> Ninja Presentation`;<sup>1</sup>
-
---
-
-- Click the `Knit` button to compile it;
-
---
-
-- or use the [RStudio Addin](https://rstudio.github.io/rstudioaddins/)<sup>2</sup> "Infinite Moon Reader" to live preview the slides (every time you update and save the Rmd document, the slides will be automatically reloaded in RStudio Viewer.
-
-.footnote[
-[1] 中文用户请看[这份教程](https://slides.yihui.org/xaringan/zh-CN.html)
-
-[2] See [#2](https://github.com/yihui/xaringan/issues/2) if you do not see the template or addin in RStudio.
-]
+transit_data_monthly = filtered_dat |>
+  filter(Year > 2013 & Year < 2024) |>
+  mutate(Year = as.integer(Year), Month = as.integer(Month)) |>
+  mutate(Month_Year = paste0(Month,"/", Year))
+```
 
 ---
 
+# Data Cleaning Process Continued...
+**Cleaning Event_Data:**
+```{r}
+event_data_monthly = event_data |>
+  mutate(Month = as.integer(factor(Month, levels = month.name))) |>
+  arrange(Year, Month) |>
+  select(Year, Month, Total.Collisions, Total.Events, Total.Fatalities, Total.Injuries) |>
+  filter(Year < 2024) |>
+  group_by(Year, Month) |>
+  summarise(Collisions = sum(Total.Collisions), Events = sum(Total.Events), Fatalities = sum(Total.Fatalities), Injuries = sum(Total.Injuries)) |>
+  mutate(Month_Year = paste0(Month,"/", Year))
+```
+
+---
+
+# New Cleaned Event Data
+```{r, echo=F}
+small_event_data = head(event_data_monthly)
+small_transport_data = head(transit_data_monthly)
+knitr::kable(small_event_data, caption = "Event Data", table.attr = "style='height:30%;'")
+```
+
+---
+
+# Graphical Representation
+```{r, echo=F}
+fatalities_by_year = event_data_monthly |>
+  select(-Month) |>
+  group_by(Year) |>
+  summarise(Collisions = sum(Collisions), Events = sum(Events), Fatalities = sum(Fatalities), Injuries = sum(Injuries))
+
+ggplot(fatalities_by_year, aes(x=Year, y=Fatalities)) +
+  geom_line() +
+  labs(title = "Transit Related Fatalities From 2014-2023", x="Year", y="Fatalities")
+```
+
+
+---
+
+# New Cleaned Transportation Data
+```{r, echo=F}
+#knitr::kable(small_transport_data, caption = "Transportation Data")
+knitr::kable(small_transport_data, caption = "Event Data", table.attr = "style='height:30%;'")
+```
+
+---
+
+
+# Merging Data
+Below contains some of the columns from the fully merged dataset, comprising of elements from the event and transport datasets.
+
+```{r, echo=F}
+transit_and_events = full_join(event_data_monthly, transit_data_monthly, by=join_by("Month_Year"))
+transit_and_events =  transit_and_events |>
+  select(Month_Year, everything(), -Year.y, -Month.y) |>
+  rename(Year = Year.x, Month = Month.x)
+kable(head(transit_and_events |>
+             select(Month_Year, Fatalities, Injuries, VMT, PETROLEUM_D11, NATURAL_GAS_D11)), 
+      caption = "Transit Event Data", table.attr = "style='height:30%;'")
+```
+
+---
+
+# How Does VMT Compare to Safety Events
+```{r, echo=F}
+nat_gas_events = transit_and_events |>
+  group_by(Year) |>
+  summarise(Natural_gas = sum(NATURAL_GAS_D11), Fatalities = sum(Fatalities), 
+            Injuries = sum(Injuries))
+petroleum_events = transit_and_events |>
+  group_by(Year) |>
+  summarise(Petroleum = sum(PETROLEUM_D11), Fatalities = sum(Fatalities), 
+            Injuries = sum(Injuries))
+vmt_events = transit_and_events |>
+  group_by(Year) |>
+  summarise(VMT = sum(VMT), Fatalities = sum(Fatalities), 
+            Injuries = sum(Injuries))
+
+e = ggplot(vmt_events, aes(x=VMT, y=Injuries)) +
+  geom_line() +
+  geom_point(color = as.factor(vmt_events$Year))+
+  geom_text(aes(label = Year), vjust = -0.5, size = 3) +
+  labs(title = "Injuries with VMT", x="Vehicle Miles Traveled", y="Injuries")
+f = ggplot(vmt_events, aes(x=VMT, y=Fatalities)) +
+  geom_line() +
+  geom_point(color = as.factor(vmt_events$Year))+
+  geom_text(aes(label = Year), vjust = -0.5, size = 3) +
+  labs(title = "Fatalities with VMT", x="Vehicle Miles Traveled", y="Fatalities")
+
+library(cowplot)
+
+l = list(e, f)
+
+plot_grid(plotlist = l, nrow = 1)
+```
+Observe multiple spikes within the graphs. This motivates the regression that we want to run, which will consider other factors like Natural Gas and Petroleum Consumption in vehicles.
+
+---
+
+# Initial Regression
+We want to observe if the outcome of both transportation fatalities and injuries can be explained by changes in three predictors:
+
+- Vehicle Miles Traveled (VMT)
+- Consumption of Natural Gas (NatGas)
+- Consumption of Petroleum (Pet)
+
+**Note**: These variables are taken across multiple different vehicles in different locations across the United States, from 2014-2023.
+
+---
+
+# Fitting the Model
+**Methodology**: We will create two multiple linear regression models. They will take on the following format:
+
+- $$\hat{Fatalities} = \beta_0 + \beta_1 VMT + \beta_2 NatGas + \beta_3 Pet$$
+
+
+- $$\hat{Injuries} = \beta_0 + \beta_1 VMT + \beta_2 NatGas + \beta_3 Pet$$
+
+---
+
+# Regression Statistics
+
+**<center>Fatality Statistics</center>**
+<br>
+```{r, echo=F}
+fatality_model = lm(Fatalities ~ VMT + PETROLEUM_D11 + NATURAL_GAS_D11, data=transit_and_events)
+fatality_summary = summary(fatality_model)
+fatality_table = fatality_summary$coefficients
+kable(fatality_table)
+```
+
+**<center>Injury Statistics</center>**
+<br>
+```{r, echo=F}
+injury_model = lm(Injuries ~ VMT + PETROLEUM_D11 + NATURAL_GAS_D11, data=transit_and_events)
+injury_summary = summary(injury_model)
+injury_table = injury_summary$coefficients
+kable(injury_table)
+```
+
+
+---
+
+# Graphical Representation
+
+Below are the added variable plots for each predictor variable in my fatality model
+```{r, echo=F}
+library(car)
+avPlots(fatality_model)
+```
+
+---
+
+# Graphical Representation (Injuries)
+Below are the added variable plots for each predictor variable in my injury model
+```{r, echo=F}
+library(car)
+avPlots(injury_model)
+```
+---
+
+# Analysis of Fatality Regression
+
+### Coefficients vs. P-values
+Even though our fatality regression has coefficients on each predictor variable, the p-values explain the actual significance of them.
+
+Moreover, it is hard to reject the hypothesis that all the predictor variables have no effect on the response variable (Fatalities) as each p-value is not statistically significant at the 95% confidence level.
+
+---
+
+# Analysis of Injury Regression
+
+### Coefficients vs. P-values
+Our injury regression tells a different story though in comparison to our fatality regression. The coefficients on the predictor variables **VMT** and **NatGas** both have p-values much less than 0.05.
+
+This means that for those two predictor variables, there is a chance they could have some indication/correlation with how injury statistics are predicted.
+
+---
+
+# Overall Validity From AvPlots
+The AvPlots do a good job of showing how each predictor variable individually contributes to the outcome of our response variable.
+
+### Fatalities
+- Each predictor variable individually shows a weak to almost 0 relationship with the Fatality variable.
+
+- This is further explained through our of our analysis of each p-value of our predictor variables not indicating statistical significance.
+
+
+### Injuries
+- The predictors *VMT* and *NatGas* both indicated a positive relationship/correlation, especially VMT.
+
+- *VMT* is shown to have the most positive slope with transportation related injuries, indicating that increases in VMT are correlated with increased in transportation related injuries.
+
+---
+
+# Conclusion
+
+#### What Did We Find?
+- Most worthwhile to continue exploring how increases in Vehicle Miles Traveled contributes to overall transportation related injuries
+
+- A weak negative correlation could exist among Natural Gas Consumption for Vehicles and transportation related injuries
+
+#### What Needs to Be Done?
+- Further analysis of transportation related injuries across different regions
+
+- A further breakdown into the types of injuries could be worthwhile to explore
+
+- Possible transformation of the data in order to better normalize the predictor variables to align better with general linear model assumptions
+
+
+---
+# Limitations of My Study
+#### Generalizing the Data
+I cleaned the data and made it very generalized for the purpose of applying the analysis more broadly. However, this fails to take into account a lot of the specifics of our different predictors.
+
+#### Omitted Variable Bias
+Similar to the generalization of my study, I did not account for a lot of other variables and factors which could explain the variance and results of my response variables. The decrease in transportation during the Pandemic is a big one, as transportation was very limited around that time.
+
+#### Relevance of Predictor Variables
+The predictor variables I chose, while worthwhile to study, may not have been the best when it came down to predicting different outcomes of safety incidents. Predictors such as Transportation Regulations or state-to-state policies may have been more effective.
+
+---
+
+# Thank You
+Note about AI Usage: AI was used to help with understanding AVPlots and helping organize date formats when cleaning the data. StackOverflow was used for general knowledge questions regarding specific libraries such as knitr and the kable command, as well as the cowplot library.
 
 ```{r gen_pdf, include = FALSE, cache = FALSE, eval = TRUE}
 infile = list.files(pattern = '.html')
-#pagedown::chrome_print(input = infile, timeout = 100)
+pagedown::chrome_print(input = infile, timeout = 100)
 ```
